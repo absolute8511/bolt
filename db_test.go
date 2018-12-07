@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,7 +20,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/boltdb/bolt"
+	"github.com/absolute8511/bolt"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
@@ -453,6 +454,61 @@ func TestDB_BeginRW(t *testing.T) {
 	}
 }
 
+// TestDB_Concurrent_WriteTo checks that issuing WriteTo operations concurrently
+// with commits does not produce corrupted db files.
+func TestDB_Concurrent_WriteTo(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+	var wg sync.WaitGroup
+	wtxs, rtxs := 5, 5
+	wg.Add(wtxs * rtxs)
+	f := func(tx *bolt.Tx) {
+		defer wg.Done()
+		f, err := ioutil.TempFile("", "bolt-")
+		if err != nil {
+			panic(err)
+		}
+		time.Sleep(time.Duration(rand.Intn(20)+1) * time.Millisecond)
+		tx.WriteTo(f)
+		tx.Rollback()
+
+		f.Close()
+		snap := MustOpenDBWithFile(f.Name())
+		defer snap.MustClose()
+		snap.MustCheck()
+	}
+	tx1, err := db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx1.CreateBucket([]byte("abc")); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx1.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < wtxs; i++ {
+		tx, err := db.Begin(true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Bucket([]byte("abc")).Put([]byte{0}, []byte{0}); err != nil {
+			t.Fatal(err)
+		}
+		for j := 0; j < rtxs; j++ {
+			rtx, rerr := db.Begin(false)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			go f(rtx)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wg.Wait()
+}
+
 // Ensure that opening a transaction while the DB is closed returns an error.
 func TestDB_BeginRW_Closed(t *testing.T) {
 	var db bolt.DB
@@ -467,10 +523,9 @@ func TestDB_Close_PendingTx_RO(t *testing.T) { testDB_Close_PendingTx(t, false) 
 // Ensure that a database cannot close while transactions are open.
 func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	db := MustOpenDB()
-	defer db.MustClose()
 
 	// Start transaction.
-	tx, err := db.Begin(true)
+	tx, err := db.Begin(writable)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,8 +547,13 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	default:
 	}
 
-	// Commit transaction.
-	if err := tx.Commit(); err != nil {
+	// Commit/close transaction.
+	if writable {
+		err = tx.Commit()
+	} else {
+		err = tx.Rollback()
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -1371,6 +1431,14 @@ type DB struct {
 // MustOpenDB returns a new, open DB at a temporary location.
 func MustOpenDB() *DB {
 	db, err := bolt.Open(tempfile(), 0666, nil)
+	if err != nil {
+		panic(err)
+	}
+	return &DB{db}
+}
+
+func MustOpenDBWithFile(fn string) *DB {
+	db, err := bolt.Open(fn, 0666, nil)
 	if err != nil {
 		panic(err)
 	}

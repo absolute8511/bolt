@@ -13,7 +13,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/boltdb/bolt"
+	"github.com/absolute8511/bolt"
 )
 
 // Ensure that a bucket that gets a non-existent key returns nil.
@@ -83,7 +83,7 @@ func TestBucket_Get_IncompatibleValue(t *testing.T) {
 // Ensure that a slice returned from a bucket has a capacity equal to its length.
 // This also allows slices to be appended to since it will require a realloc by Go.
 //
-// https://github.com/boltdb/bolt/issues/544
+// https://github.com/absolute8511/bolt/issues/544
 func TestBucket_Get_Capacity(t *testing.T) {
 	db := MustOpenDB()
 	defer db.MustClose()
@@ -867,7 +867,7 @@ func TestBucket_NextSequence(t *testing.T) {
 
 // Ensure that a bucket will persist an autoincrementing sequence even if its
 // the only thing updated on the bucket.
-// https://github.com/boltdb/bolt/issues/296
+// https://github.com/absolute8511/bolt/issues/296
 func TestBucket_NextSequence_Persist(t *testing.T) {
 	db := MustOpenDB()
 	defer db.MustClose()

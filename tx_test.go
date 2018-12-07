@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/boltdb/bolt"
+	"github.com/absolute8511/bolt"
 )
 
 // Ensure that committing a closed transaction returns an error.
@@ -62,6 +62,7 @@ func TestTx_Commit_ErrTxNotWritable(t *testing.T) {
 	if err := tx.Commit(); err != bolt.ErrTxNotWritable {
 		t.Fatal(err)
 	}
+	tx.Rollback()
 }
 
 // Ensure that a transaction can retrieve a cursor on the root bucket.

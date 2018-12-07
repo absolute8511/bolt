@@ -9,7 +9,7 @@ race:
 
 # go get github.com/kisielk/errcheck
 errcheck:
-	@errcheck -ignorepkg=bytes -ignore=os:Remove github.com/boltdb/bolt
+	@errcheck -ignorepkg=bytes -ignore=os:Remove github.com/absolute8511/bolt
 
 test: 
 	@go test -v -cover .

@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/boltdb/bolt"
+	"github.com/absolute8511/bolt"
 )
 
 var (
@@ -875,7 +875,7 @@ The following errors can be reported:
 No errors should occur in your database. However, if for some reason you
 experience corruption, please submit a ticket to the Bolt project page:
 
-  https://github.com/boltdb/bolt/issues
+  https://github.com/absolute8511/bolt/issues
 `, "\n")
 }
 
