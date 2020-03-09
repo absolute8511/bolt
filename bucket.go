@@ -14,13 +14,6 @@ const (
 	MaxValueSize = (1 << 31) - 2
 )
 
-const (
-	maxUint = ^uint(0)
-	minUint = 0
-	maxInt  = int(^uint(0) >> 1)
-	minInt  = -maxInt - 1
-)
-
 const bucketHeaderSize = int(unsafe.Sizeof(bucket{}))
 
 const (
@@ -213,7 +206,7 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
 }
 
 // DeleteBucket deletes a bucket at the given key.
-// Returns an error if the bucket does not exists, or if the key represents a non-bucket value.
+// Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
 func (b *Bucket) DeleteBucket(key []byte) error {
 	if b.tx.db == nil {
 		return ErrTxClosed
@@ -323,7 +316,12 @@ func (b *Bucket) Delete(key []byte) error {
 
 	// Move cursor to correct position.
 	c := b.Cursor()
-	_, _, flags := c.seek(key)
+	k, _, flags := c.seek(key)
+
+	// Return nil if the key doesn't exist.
+	if !bytes.Equal(key, k) {
+		return nil
+	}
 
 	// Return an error if there is already existing bucket value.
 	if (flags & bucketLeafFlag) != 0 {

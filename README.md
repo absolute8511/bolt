@@ -36,40 +36,46 @@ Shopify and Heroku use Bolt-backed services every day.
 > leaving it in its current state is the most prudent course of action.
 >
 > If you are interested in using a more featureful version of Bolt, I suggest that
-> you look at the CoreOS fork called [bbolt](https://github.com/coreos/bbolt).
+> you look at the CoreOS fork called [bolt](https://github.com/coreos/bolt).
 
 - Ben Johnson ([@benbjohnson](https://twitter.com/benbjohnson))
 
 ## Table of Contents
 
-- [Getting Started](#getting-started)
-  - [Installing](#installing)
-  - [Opening a database](#opening-a-database)
-  - [Transactions](#transactions)
-    - [Read-write transactions](#read-write-transactions)
-    - [Read-only transactions](#read-only-transactions)
-    - [Batch read-write transactions](#batch-read-write-transactions)
-    - [Managing transactions manually](#managing-transactions-manually)
-  - [Using buckets](#using-buckets)
-  - [Using key/value pairs](#using-keyvalue-pairs)
-  - [Autoincrementing integer for the bucket](#autoincrementing-integer-for-the-bucket)
-  - [Iterating over keys](#iterating-over-keys)
-    - [Prefix scans](#prefix-scans)
-    - [Range scans](#range-scans)
-    - [ForEach()](#foreach)
-  - [Nested buckets](#nested-buckets)
-  - [Database backups](#database-backups)
-  - [Statistics](#statistics)
-  - [Read-Only Mode](#read-only-mode)
-  - [Mobile Use (iOS/Android)](#mobile-use-iosandroid)
-- [Resources](#resources)
-- [Comparison with other databases](#comparison-with-other-databases)
-  - [Postgres, MySQL, & other relational databases](#postgres-mysql--other-relational-databases)
-  - [LevelDB, RocksDB](#leveldb-rocksdb)
-  - [LMDB](#lmdb)
-- [Caveats & Limitations](#caveats--limitations)
-- [Reading the Source](#reading-the-source)
-- [Other Projects Using Bolt](#other-projects-using-bolt)
+- [Bolt ![Coverage Status](https://coveralls.io/r/boltdb/bolt?branch=master) [![GoDoc](https://godoc.org/github.com/boltdb/bolt?status.svg)](https://godoc.org/github.com/boltdb/bolt) ![Version](https://img.shields.io/badge/version-1.2.1-green.svg)](#bolt-img-src%22httpscoverallsiorboltdbboltbranchmaster%22-alt%22coverage-status%22-img-src%22httpsgodocorggithubcomboltdbboltstatussvg%22-alt%22godoc%22-img-src%22httpsimgshieldsiobadgeversion-121-greensvg%22-alt%22version%22)
+  - [Project Status](#project-status)
+  - [A message from the author](#a-message-from-the-author)
+  - [Table of Contents](#table-of-contents)
+  - [Getting Started](#getting-started)
+    - [Installing](#installing)
+    - [Opening a database](#opening-a-database)
+    - [Transactions](#transactions)
+      - [Read-write transactions](#read-write-transactions)
+      - [Read-only transactions](#read-only-transactions)
+      - [Batch read-write transactions](#batch-read-write-transactions)
+      - [Managing transactions manually](#managing-transactions-manually)
+    - [Using buckets](#using-buckets)
+    - [Using key/value pairs](#using-keyvalue-pairs)
+    - [Autoincrementing integer for the bucket](#autoincrementing-integer-for-the-bucket)
+    - [Iterating over keys](#iterating-over-keys)
+      - [Prefix scans](#prefix-scans)
+      - [Range scans](#range-scans)
+      - [ForEach()](#foreach)
+    - [Nested buckets](#nested-buckets)
+    - [Database backups](#database-backups)
+    - [Statistics](#statistics)
+    - [Read-Only Mode](#read-only-mode)
+    - [Mobile Use (iOS/Android)](#mobile-use-iosandroid)
+      - [Android](#android)
+      - [iOS](#ios)
+  - [Resources](#resources)
+  - [Comparison with other databases](#comparison-with-other-databases)
+    - [Postgres, MySQL, & other relational databases](#postgres-mysql--other-relational-databases)
+    - [LevelDB, RocksDB](#leveldb-rocksdb)
+    - [LMDB](#lmdb)
+  - [Caveats & Limitations](#caveats--limitations)
+  - [Reading the Source](#reading-the-source)
+  - [Other Projects Using Bolt](#other-projects-using-bolt)
 
 ## Getting Started
 
@@ -258,7 +264,7 @@ should be writable.
 ### Using buckets
 
 Buckets are collections of key/value pairs within the database. All keys in a
-bucket must be unique. You can create a bucket using the `DB.CreateBucket()`
+bucket must be unique. You can create a bucket using the `Tx.CreateBucket()`
 function:
 
 ```go
