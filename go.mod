@@ -1,5 +1,5 @@
 module github.com/absolute8511/bolt
 
-go 1.13
+go 1.12
 
-require golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527
+require golang.org/x/sys v0.0.0-20200923182605-d9f96fdee20d

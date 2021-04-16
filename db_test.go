@@ -73,6 +73,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 	var wg sync.WaitGroup
+	errCh := make(chan error, iterations*instances)
 	for iteration := 0; iteration < iterations; iteration++ {
 		for instance := 0; instance < instances; instance++ {
 			wg.Add(1)
@@ -80,14 +81,22 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 				defer wg.Done()
 				db, err := bolt.Open(path, 0600, nil)
 				if err != nil {
-					t.Fatal(err)
+					errCh <- err
+					return
 				}
 				if err := db.Close(); err != nil {
-					t.Fatal(err)
+					errCh <- err
+					return
 				}
 			}()
 		}
 		wg.Wait()
+	}
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("error from inside goroutine: %v", err)
+		}
 	}
 }
 
@@ -199,80 +208,6 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	// Reopen data file.
 	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrChecksum {
 		t.Fatalf("unexpected error: %s", err)
-	}
-}
-
-func TestOpenWithDifferentOpts(t *testing.T) {
-	// Open a data file.
-	opt := &bolt.Options{}
-	db := MustOpenWithOption(opt)
-	path := db.Path()
-	defer db.MustClose()
-
-	// Insert until we get above the minimum 4MB size.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
-		for i := 0; i < 10000; i++ {
-			if err := b.Put([]byte(fmt.Sprintf("%04d", i)), []byte(fmt.Sprintf("%04d", i))); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Close database and grab the size.
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	opt.FreelistType = bolt.FreelistMapType
-	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0666, opt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	db0.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("data"))
-		for i := 0; i < 10000; i++ {
-			ret := b.Get([]byte(fmt.Sprintf("%04d", i)))
-			if !bytes.Equal(ret, []byte(fmt.Sprintf("%04d", i))) {
-				t.Fatal("not equal")
-			}
-		}
-		return nil
-	})
-	db0.Update(func(tx *bolt.Tx) error {
-		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
-		for i := 0; i < 10000; i++ {
-			if err := b.Put([]byte(fmt.Sprintf("%04d", i)), []byte(fmt.Sprintf("%04d", i+1))); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return nil
-	})
-	if err := db0.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	opt.FreelistType = bolt.FreelistArrayType
-	db1, err := bolt.Open(path, 0666, opt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	db1.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("data"))
-		for i := 0; i < 10000; i++ {
-			ret := b.Get([]byte(fmt.Sprintf("%04d", i)))
-			if !bytes.Equal(ret, []byte(fmt.Sprintf("%04d", i+1))) {
-				t.Fatal("not equal")
-			}
-		}
-		return nil
-	})
-	if err := db1.Close(); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -502,19 +437,20 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	done := make(chan struct{})
+	done := make(chan error, 1)
 
 	go func() {
-		if err := wtx.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		done <- struct{}{}
+		err := wtx.Commit()
+		done <- err
 	}()
 
 	select {
 	case <-time.After(5 * time.Second):
 		t.Errorf("unexpected that the reader blocks writer")
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := rtx.Rollback(); err != nil {
@@ -772,18 +708,19 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	}
 
 	// Open update in separate goroutine.
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		if err := db.Close(); err != nil {
-			t.Fatal(err)
-		}
-		close(done)
+		err := db.Close()
+		done <- err
 	}()
 
 	// Ensure database hasn't closed.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Errorf("error from inside goroutine: %v", err)
+		}
 		t.Fatal("database closed too early")
 	default:
 	}
@@ -801,7 +738,10 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	// Ensure database closed now.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("error from inside goroutine: %v", err)
+		}
 	default:
 		t.Fatal("database did not close")
 	}
@@ -1182,7 +1122,7 @@ func TestDB_Batch(t *testing.T) {
 
 	// Iterate over multiple updates in separate goroutines.
 	n := 2
-	ch := make(chan error)
+	ch := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			ch <- db.Batch(func(tx *bolt.Tx) error {
@@ -1432,7 +1372,7 @@ func ExampleDB_View() {
 	// John's last name is doe.
 }
 
-func ExampleDB_Begin_ReadOnly() {
+func ExampleDB_Begin() {
 	// Open the database.
 	db, err := bolt.Open(tempfile(), 0666, nil)
 	if err != nil {
@@ -1594,6 +1534,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		start := make(chan struct{})
 		var wg sync.WaitGroup
+		errCh := make(chan error, 10)
 
 		for major := 0; major < 10; major++ {
 			wg.Add(1)
@@ -1616,13 +1557,18 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 					}
 					return nil
 				}
-				if err := db.Update(insert100); err != nil {
-					b.Fatal(err)
-				}
+				err := db.Update(insert100)
+				errCh <- err
 			}(uint32(major))
 		}
 		close(start)
 		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
 	}
 
 	b.StopTimer()
